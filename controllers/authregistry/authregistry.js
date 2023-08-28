@@ -7,6 +7,8 @@ const moment = require('moment');
 const oauth2_server = require('oauth2-server'); //eslint-disable-line snakecase/snakecase
 const uuid = require('uuid');
 
+const util = require('util')
+
 const config_service = require('../../lib/configService.js');
 const models = require('../../models/models');
 const utils = require('../../controllers/extparticipant/utils');
@@ -171,14 +173,15 @@ const _query_evidences = async function _query_evidences(req, res) {
     res.status(404).end();
     return true;
   }
-
+  debug("Found evidence: ", util.inspect(evidence, false, null, true))
   debug('Filtering delegation evidence using the provided mask');
 
   const new_policy_sets = mask.policySets.flatMap((policy_set_mask, i) => {
 
     debug(`Processing policy set ${i} from the providen mask`);
-
+    debug("Policy Set Mask: ", util.inspect(policy_set_mask, false, null, true))
     return evidence.policySets.map((policy_set, j) => {
+      debug("Policy Set: ", util.inspect(policy_set, false, null, true))
       debug(`  Processing policy set ${j} from the available delegation evidence`);
 
       const response_policy_set = {
@@ -189,12 +192,15 @@ const _query_evidences = async function _query_evidences(req, res) {
       response_policy_set.policies = policy_set_mask.policies.map((policy_mask, z) => {
         debug(`    Processing policy ${z} from the current policy set`);
         const matching_policies = policy_set.policies.filter((policy) => is_matching_policy(policy_mask, policy));
-        return {
+
+        const answer = {
           target: policy_mask.target,
           rules: [{
             effect: (matching_policies.length === 0 || matching_policies.some(p => is_denying_permission(policy_mask, p))) ? "Deny": "Permit"
           }]
-        };
+        }
+        debug("Matched policy: ", util.inspect(answer, false, null, true))
+        return answer;
       });
 
       return response_policy_set;

@@ -81,6 +81,33 @@ const DELEGATION_MASK2 = {
 };
 Object.freeze(DELEGATION_MASK2);
 
+const DELEGATION_MASK3 = {
+  delegationRequest: {
+    policyIssuer: "EU.EORI.DENHAAG19902304",
+    target: {
+      accessSubject: "27633085-de19-4517-b0c7-d4dc23e38587"
+    },
+    policySets: [{
+      policies: [{
+        target: {
+          resource: {
+            type: "T",
+            identifiers: ["urn:ngsi-ld:Subscription:bc0254a0-2feb-11ee-a0aa-02420a050004"],
+            attributes: ["state", "status"]
+          },
+          actions: ["POST:Notification"]
+        },
+        rules: [
+          {
+            effect: "Permit"
+          }
+        ]
+      }]
+    }]
+  }
+};
+Object.freeze(DELEGATION_MASK3);
+
 const DELEGATION_EVIDENCE1 = {
   notBefore: 1541058939,
   notOnOrAfter: 2147483647,
@@ -105,6 +132,43 @@ const DELEGATION_EVIDENCE1 = {
               attributes: ["*"]
             },
             actions: ["GET"]
+          },
+          rules: [{
+            effect: "Permit"
+          }]
+        }
+      ]
+    }
+  ]
+};
+
+const DELEGATION_EVIDENCE2 = {
+  notBefore: 1509633681,
+  notOnOrAfter: 1723202630,
+  policyIssuer: "EU.EORI.DENHAAG19902304",
+  target: {
+    accessSubject: "27633085-de19-4517-b0c7-d4dc23e38587"
+  },
+  policySets: [
+    {
+      maxDelegationDepth: 1,
+      target: {
+        environment: {
+          licenses: ["ISHARE.0001"]
+        }
+      },
+      policies: [
+        {
+          target: {
+            resource: {
+              type: "T",
+              identifiers: ["urn:ngsi-ld:Subscription:bc0254a0-2feb-11ee-a0aa-02420a050004"],
+              attributes: [
+                "state",
+                "status"
+              ]
+            },
+            actions: ["POST:Notification"]
           },
           rules: [{
             effect: "Permit"
@@ -294,7 +358,7 @@ describe('Authorization Registry: ', () => {
       const [req, res, next] = build_mocks();
       req.body = DELEGATION_MASK1;
       sinon.stub(models.delegation_evidence, "findOne").returns({
-          policy: JSON.parse(JSON.stringify(DELEGATION_EVIDENCE1))
+        policy: JSON.parse(JSON.stringify(DELEGATION_EVIDENCE1))
       });
       sinon.stub(authregistry.oauth2, "authenticate").returns(Promise.resolve(USER1));
       sinon.stub(utils, "create_jwt").returns(Promise.resolve("generated_jwt"));
@@ -314,7 +378,7 @@ describe('Authorization Registry: ', () => {
           exp: 1633947594,
           iat: 1633947564,
           iss: "EU.EORI.NLHAPPYPETS",
-          jti: "73a791c0-e9cc-4e13-bd5e-2fe03cde2a8a",
+          jti: sinon.match.any,
           sub: "1b49be31-ecd4-4a52-8a99-502ba8f24ecc",
           aud: "930439c2-4259-4da3-be65-ea12b75aa425",
           delegationEvidence: {
@@ -353,7 +417,7 @@ describe('Authorization Registry: ', () => {
       const [req, res, next] = build_mocks();
       req.body = DELEGATION_MASK2;
       sinon.stub(models.delegation_evidence, "findOne").returns({
-          policy: JSON.parse(JSON.stringify(DELEGATION_EVIDENCE1))
+        policy: JSON.parse(JSON.stringify(DELEGATION_EVIDENCE1))
       });
       sinon.stub(authregistry.oauth2, "authenticate").returns(Promise.resolve(USER1));
       sinon.stub(utils, "create_jwt").returns(Promise.resolve("generated_jwt"));
@@ -373,7 +437,7 @@ describe('Authorization Registry: ', () => {
           exp: 1633947594,
           iat: 1633947564,
           iss: "EU.EORI.NLHAPPYPETS",
-          jti: "73a791c0-e9cc-4e13-bd5e-2fe03cde2a8a",
+          jti: sinon.match.any,
           sub: "1b49be31-ecd4-4a52-8a99-502ba8f24ecc",
           aud: "930439c2-4259-4da3-be65-ea12b75aa425",
           delegationEvidence: {
@@ -405,7 +469,61 @@ describe('Authorization Registry: ', () => {
         done();
       });
     });
+    it('should return delegation evidences when there are matching policies (MANUSPACE)', (done) => {
+      const [req, res, next] = build_mocks();
+      req.body = DELEGATION_MASK3;
+      sinon.stub(models.delegation_evidence, "findOne").returns({
+        policy: JSON.parse(JSON.stringify(DELEGATION_EVIDENCE2))
+      });
+      sinon.stub(authregistry.oauth2, "authenticate").returns(Promise.resolve(USER1));
+      sinon.stub(utils, "create_jwt").returns(Promise.resolve("generated_jwt"));
+      sinon.stub(uuid, "v4").returns("73a791c0-e9cc-4e13-bd5e-2fe03cde2a8a");
+      const moment_mock = sinon.stub(moment.prototype, "unix");
+      moment_mock.onCall(0).returns(1633947564);
+      moment_mock.onCall(1).returns(1633947594);
 
+      authregistry.query_evidences(req, res, next);
+
+      // query_evidences is asynchronous so wait request is processed
+      setTimeout(() => {
+        sinon.assert.calledOnce(res.status);
+        sinon.assert.calledWith(res.status, 200);
+        sinon.assert.calledOnce(next);
+        sinon.assert.calledWith(utils.create_jwt, {
+          exp: 1633947594,
+          iat: 1633947564,
+          iss: "EU.EORI.NLHAPPYPETS",
+          jti: sinon.match.any,
+          sub: "27633085-de19-4517-b0c7-d4dc23e38587",
+          aud: "930439c2-4259-4da3-be65-ea12b75aa425",
+          delegationEvidence: {
+            notBefore: 1509633681,
+            notOnOrAfter: 1723202630,
+            policyIssuer: "EU.EORI.DENHAAG19902304",
+            policySets: [{
+              maxDelegationDepth: 1,
+              policies: [{
+                rules: [{ effect: "Permit" }],
+                target: {
+                  actions: ["POST:Notification"],
+                  resource: {
+                    attributes: ["state", "status"],
+                    identifiers: ["urn:ngsi-ld:Subscription:bc0254a0-2feb-11ee-a0aa-02420a050004"],
+                    type: "T"
+                  }
+                }
+              }],
+              target: { environment: { licenses: ["ISHARE.0001"] } }
+            }],
+            target: { accessSubject: "27633085-de19-4517-b0c7-d4dc23e38587" }
+          }
+        });
+        sinon.assert.calledOnce(res.json);
+        sinon.assert.calledWith(res.json, {
+          delegation_token: "generated_jwt"
+        });
+        done();
+      });
+    });
   });
-
 });
