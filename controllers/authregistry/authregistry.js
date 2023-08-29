@@ -118,7 +118,7 @@ const is_matching_policy = function is_matching_policy(policy_mask, policy) {
 
   // Check identifiers
   const id_match = policy_mask.target.resource.identifiers.every(
-    mid => {return resource.identifiers.length === 1 && resource.identifiers.includes("*") || resource.identifiers.includes(mid);}
+    mid => { return resource.identifiers.length === 1 && resource.identifiers.includes("*") || resource.identifiers.includes(mid); }
   );
   if (!id_match) {
     return false;
@@ -126,7 +126,7 @@ const is_matching_policy = function is_matching_policy(policy_mask, policy) {
 
   // Check attributes
   const attributes_match = policy_mask.target.resource.attributes.every(
-    aid => {return resource.attributes.length === 1 && resource.attributes.includes("*") || resource.attributes.includes(aid);}
+    aid => { return resource.attributes.length === 1 && resource.attributes.includes("*") || resource.attributes.includes(aid); }
   );
   if (!attributes_match) {
     return false;
@@ -134,18 +134,18 @@ const is_matching_policy = function is_matching_policy(policy_mask, policy) {
 
   // Check actions
   return policy_mask.target.actions != null &&
-         policy_mask.target.actions.length > 0 &&
-         policy_mask.target.actions.every(
-           mact => {return policy.target.actions.length === 1 && policy.target.actions.includes("*") || policy.target.actions.includes(mact);}
-         );
+    policy_mask.target.actions.length > 0 &&
+    policy_mask.target.actions.every(
+      mact => { return policy.target.actions.length === 1 && policy.target.actions.includes("*") || policy.target.actions.includes(mact); }
+    );
 };
 
 const is_denying_permission = function is_denying_permission(policy_mask, policy) {
   return policy.rules.reverse().some(rule => rule.effect === "Deny" &&
-      rule.target.resource.type === policy_mask.target.resource.type &&
-      (rule.target.resource.identifiers.includes("*") || policy_mask.target.resource.identifiers.some(i => rule.target.resource.identifiers.includes(i))) &&
-      (rule.target.resource.attributes.includes("*") || policy_mask.target.resource.attributes.some(a => rule.target.resource.attributes.includes(a))) &&
-      (rule.target.actions.length === 0 || rule.target.actions.includes("*") || policy_mask.target.actions.some(a => rule.target.actions.includes(a)))
+    rule.target.resource.type === policy_mask.target.resource.type &&
+    (rule.target.resource.identifiers.includes("*") || policy_mask.target.resource.identifiers.some(i => rule.target.resource.identifiers.includes(i))) &&
+    (rule.target.resource.attributes.includes("*") || policy_mask.target.resource.attributes.some(a => rule.target.resource.attributes.includes(a))) &&
+    (rule.target.actions.length === 0 || rule.target.actions.includes("*") || policy_mask.target.actions.some(a => rule.target.actions.includes(a)))
   );
 };
 
@@ -176,36 +176,42 @@ const _query_evidences = async function _query_evidences(req, res) {
   debug("Found evidence: ", util.inspect(evidence, false, null, true))
   debug('Filtering delegation evidence using the provided mask');
 
+
   const new_policy_sets = mask.policySets.flatMap((policy_set_mask, i) => {
+    try {
+      debug(`Processing policy set ${i} from the providen mask`);
+      debug("Policy Set Mask: ", util.inspect(policy_set_mask, false, null, true))
+      return evidence.policySets.map((policy_set, j) => {
+        debug("Policy Set: ", util.inspect(policy_set, false, null, true))
+        debug(`  Processing policy set ${j} from the available delegation evidence`);
 
-    debug(`Processing policy set ${i} from the providen mask`);
-    debug("Policy Set Mask: ", util.inspect(policy_set_mask, false, null, true))
-    return evidence.policySets.map((policy_set, j) => {
-      debug("Policy Set: ", util.inspect(policy_set, false, null, true))
-      debug(`  Processing policy set ${j} from the available delegation evidence`);
+        const response_policy_set = {
+          maxDelegationDepth: policy_set.maxDelegationDepth, //eslint-disable-line snakecase/snakecase
+          target: policy_set.target
+        };
 
-      const response_policy_set = {
-        maxDelegationDepth: policy_set.maxDelegationDepth, //eslint-disable-line snakecase/snakecase
-        target: policy_set.target
-      };
+        response_policy_set.policies = policy_set_mask.policies.map((policy_mask, z) => {
+          debug(`    Processing policy ${z} from the current policy set`);
+          const matching_policies = policy_set.policies.filter((policy) => is_matching_policy(policy_mask, policy));
 
-      response_policy_set.policies = policy_set_mask.policies.map((policy_mask, z) => {
-        debug(`    Processing policy ${z} from the current policy set`);
-        const matching_policies = policy_set.policies.filter((policy) => is_matching_policy(policy_mask, policy));
+          const answer = {
+            target: policy_mask.target,
+            rules: [{
+              effect: (matching_policies.length === 0 || matching_policies.some(p => is_denying_permission(policy_mask, p))) ? "Deny" : "Permit"
+            }]
+          }
+          debug("Matched policy: ", util.inspect(answer, false, null, true))
+          return answer;
+        });
 
-        const answer = {
-          target: policy_mask.target,
-          rules: [{
-            effect: (matching_policies.length === 0 || matching_policies.some(p => is_denying_permission(policy_mask, p))) ? "Deny": "Permit"
-          }]
-        }
-        debug("Matched policy: ", util.inspect(answer, false, null, true))
-        return answer;
+        return response_policy_set;
       });
-
-      return response_policy_set;
-    });
+    } catch (e) {
+      debug("Exception occured: ", util.inspect(e, false, null, true))
+      throw e
+    }
   });
+
   evidence.policySets = new_policy_sets;
 
   const now = moment();
@@ -222,7 +228,7 @@ const _query_evidences = async function _query_evidences(req, res) {
   });
 
   debug("Delegation evidence processed");
-  res.status(200).json({delegation_token});
+  res.status(200).json({ delegation_token });
 
   return false;
 };
